@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, copyFile } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
 import { ATTRIBUTE_KEYS } from "@/lib/game/constants";
@@ -312,4 +312,85 @@ export async function adminUpdateFusions(
 
   revalidateAll();
   return { ok: true, message: "مسیرهای فیوژن ذخیره شد." };
+}
+
+// ---- export to seed ----
+
+// Snapshot the current species + fusion data (and copy chosen images into the
+// committed public/cards folder) into prisma/seed-overrides.json so the admin's
+// in-game edits can be committed to git and reproduced on every fresh seed.
+export async function adminExportSeed(): Promise<
+  AdminResponse & { files?: string[]; speciesCount?: number; fusionCount?: number }
+> {
+  await requireAdmin();
+
+  const cardsDir = path.join(process.cwd(), "public", "cards");
+  await mkdir(cardsDir, { recursive: true });
+
+  const allSpecies = await db.monsterSpecies.findMany({ orderBy: { key: "asc" } });
+
+  const speciesOut = [];
+  for (const s of allSpecies) {
+    let imageUrl = s.imageUrl;
+    // Move uploaded images (gitignored /uploads) into committed /cards.
+    if (imageUrl && imageUrl.startsWith("/uploads/")) {
+      const filename = imageUrl.slice("/uploads/".length);
+      const src = path.join(process.cwd(), "public", "uploads", filename);
+      const dest = path.join(cardsDir, filename);
+      try {
+        await copyFile(src, dest);
+        imageUrl = `/cards/${filename}`;
+        await db.monsterSpecies.update({ where: { id: s.id }, data: { imageUrl } });
+      } catch {
+        // source file missing — keep the original url as-is
+      }
+    }
+    speciesOut.push({
+      key: s.key,
+      name: s.name,
+      nameFa: s.nameFa,
+      theme: s.theme,
+      rarity: s.rarity,
+      isBase: s.isBase,
+      icon: s.icon,
+      imageUrl,
+      power: s.power,
+      defense: s.defense,
+      speed: s.speed,
+      evasion: s.evasion,
+      intelligence: s.intelligence,
+      accuracy: s.accuracy,
+    });
+  }
+
+  const recipes = await db.fusionRecipe.findMany({
+    include: { from: true, result: true, costs: { include: { resourceType: true } } },
+    orderBy: [{ fromSpeciesId: "asc" }, { optionIndex: "asc" }],
+  });
+
+  const fusionsOut = recipes.map((r) => ({
+    fromKey: r.from.key,
+    optionIndex: r.optionIndex,
+    resultKey: r.result?.key ?? null,
+    isRandom: r.isRandom,
+    costs: r.costs.map((c) => ({ resourceKey: c.resourceType.key, quantity: c.quantity })),
+  }));
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    species: speciesOut,
+    fusions: fusionsOut,
+  };
+
+  const file = path.join(process.cwd(), "prisma", "seed-overrides.json");
+  await writeFile(file, JSON.stringify(payload, null, 2) + "\n");
+
+  revalidateAll();
+  return {
+    ok: true,
+    message: "خروجی سید ساخته شد.",
+    files: ["prisma/seed-overrides.json", "public/cards/"],
+    speciesCount: speciesOut.length,
+    fusionCount: fusionsOut.length,
+  };
 }

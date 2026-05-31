@@ -41,10 +41,33 @@ npm run dev                   # http://localhost:3000
 | `npm run db:seed` | پر کردن دیتابیس |
 | `npm run db:reset` | ریست کامل دیتابیس + seed |
 
+## پنل مدیریت و همیشگی‌کردن تغییرات (Admin & Export)
+
+پنل مدیریت در آدرس `/admin` است (رمز پیش‌فرض `monster-admin`، با `ADMIN_PASSWORD` در `.env` قابل‌تغییر).
+تغییراتی که در پنل می‌دهی (اتریبیوت‌ها، نام، عکس، مسیرهای فیوژن، یا کارت جدید) فقط در دیتابیس
+لوکال (`dev.db`) ذخیره می‌شوند و **روی گیت نمی‌روند**.
+
+برای همیشگی‌کردن آن‌ها (تا روی هر نصب تازه و روی گیت‌هاب هم بیایند):
+
+1. در `/admin` دکمه‌ی **«📤 خروجی برای گیت‌هاب»** را بزن. این کار:
+   - وضعیت همه‌ی کارت‌ها و مسیرهای فیوژن را در `prisma/seed-overrides.json` می‌نویسد.
+   - عکس‌های انتخاب‌شده را از `public/uploads` (که در گیت نادیده گرفته می‌شود) به `public/cards`
+     (که در گیت هست) کپی می‌کند و آدرسشان را به‌روز می‌کند.
+2. این فایل‌ها را کامیت و پوش کن:
+   ```bash
+   git add prisma/seed-overrides.json public/cards
+   git commit -m "update cards"
+   git push
+   ```
+
+`prisma/seed.ts` در پایان seed، اگر `seed-overrides.json` وجود داشته باشد آن را اعمال می‌کند،
+پس روی هر `npm run db:seed` یا `npm run db:reset` همان کارت‌ها و عکس‌ها بازتولید می‌شوند.
+
 ## ساختار (Structure)
 
 - `prisma/schema.prisma` — مدل داده (هیولاها، کارت‌ها، منابع، فیوژن، بازیکن‌ها، مبارزات).
-- `prisma/seed.ts` — دیتای اولیه.
+- `prisma/seed.ts` — دیتای اولیه (+ اعمال `seed-overrides.json` در صورت وجود).
+- `prisma/seed-overrides.json` — خروجی پنل مدیریت (اختیاری؛ با دکمه‌ی «خروجی برای گیت‌هاب» ساخته می‌شود).
 - `src/lib/game/` — منطق بازی: `constants.ts`, `stats.ts`, `battle.ts`, `queries.ts`.
 - `src/app/actions.ts` — Server Actions (مبارزه، تمرین، فیوژن، خرید، پایان روز).
 - `src/app/*` — صفحات: خانه، کلکسیون، مبارزه، تمرین، فیوژن، فروشگاه، لیدربورد.
