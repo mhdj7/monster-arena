@@ -9,7 +9,13 @@ import {
   TUNING,
 } from "@/lib/game/constants";
 import { applyXp, effectiveStats, maxEnergy } from "@/lib/game/stats";
-import { BattleCard, BattleResult, simulateBattle } from "@/lib/game/battle";
+import {
+  BattleCard,
+  BattleResult,
+  OfficialResult,
+  simulateBattle,
+  simulateOfficial,
+} from "@/lib/game/battle";
 import { getFusionOptions, getGameState, getYouId } from "@/lib/game/queries";
 
 export async function loadFusionForCard(cardId: string) {
@@ -25,6 +31,7 @@ function toBattleCard(card: CardWithSpecies): BattleCard {
     name: card.species.name,
     nameFa: card.species.nameFa,
     icon: card.species.icon,
+    imageUrl: card.species.imageUrl,
     stats: effectiveStats(card),
   };
 }
@@ -67,7 +74,9 @@ async function grantResources(playerId: string, rewards: { key: string; qty: num
 export type FightResponse = {
   ok: boolean;
   error?: string;
+  mode?: "official" | "underground";
   result?: BattleResult;
+  official?: OfficialResult;
   opponentName?: string;
   rewardGold?: number;
   rewards?: { key: string; nameFa: string; icon: string; qty: number }[];
@@ -119,10 +128,14 @@ export async function fightOfficial(teamIds: string[]): Promise<FightResponse> {
   const opponent = await pickOpponent(you.leagueLevel, 3);
   if (!opponent) return { ok: false, error: "حریفی پیدا نشد." };
 
-  const selfTeam = cards.map(toBattleCard);
+  // Preserve the player's chosen order (card[0] vs opp[0], etc.).
+  const orderedCards = teamIds
+    .map((id) => cards.find((c) => c.id === id))
+    .filter((c): c is CardWithSpecies => Boolean(c));
+  const selfTeam = orderedCards.map(toBattleCard);
   const oppTeam = (opponent.monsters as CardWithSpecies[]).slice(0, 3).map(toBattleCard);
-  const result = simulateBattle(selfTeam, oppTeam);
-  const win = result.winner === "self";
+  const official = simulateOfficial(selfTeam, oppTeam);
+  const win = official.winner === "self";
 
   // rewards
   let rewardGold = 0;
@@ -160,11 +173,11 @@ export async function fightOfficial(teamIds: string[]): Promise<FightResponse> {
       type: "OFFICIAL",
       result: win ? "WIN" : "LOSS",
       opponentName: opponent.name,
-      scoreSelf: result.scoreSelf,
-      scoreOpp: result.scoreOpp,
+      scoreSelf: official.winsSelf,
+      scoreOpp: official.winsOpp,
       rewardGold,
       rewardJson: JSON.stringify(rewards),
-      log: JSON.stringify(result.log),
+      log: JSON.stringify(official.matchups),
       day: state.day,
     },
   });
@@ -174,7 +187,8 @@ export async function fightOfficial(teamIds: string[]): Promise<FightResponse> {
   revalidatePath("/leaderboard");
   return {
     ok: true,
-    result,
+    mode: "official",
+    official,
     opponentName: opponent.name,
     rewardGold,
     rewards,
@@ -244,7 +258,7 @@ export async function fightUnderground(cardId: string): Promise<FightResponse> {
 
   revalidatePath("/");
   revalidatePath("/battle");
-  return { ok: true, result, opponentName: opponent.name, rewardGold, rewards, levelUps };
+  return { ok: true, mode: "underground", result, opponentName: opponent.name, rewardGold, rewards, levelUps };
 }
 
 // Award XP to a set of cards and persist level/xp/energy. Returns level-up notices.
@@ -289,41 +303,6 @@ export async function trainTemp(
   revalidatePath("/");
   revalidatePath("/train");
   return { ok: true, message: `+${TUNING.tempTrainAmount} موقت اضافه شد.` };
-}
-
-export async function trainPerm(
-  cardId: string,
-  attr: AttributeKey
-): Promise<ActionResponse> {
-  if (!ATTRIBUTE_KEYS.includes(attr)) return { ok: false, error: "اتریبیوت نامعتبر." };
-  const youId = await getYouId();
-  const [card, you] = await Promise.all([
-    db.monsterCard.findFirst({ where: { id: cardId, ownerId: youId } }),
-    db.player.findUniqueOrThrow({ where: { id: youId } }),
-  ]);
-  if (!card) return { ok: false, error: "هیولا پیدا نشد." };
-  if (card.energy < TUNING.permTrainEnergyCost)
-    return { ok: false, error: "انرژی کافی نیست." };
-  if (you.gold < TUNING.permTrainGoldCost)
-    return { ok: false, error: "پول کافی نیست." };
-
-  const res = applyXp(card.level, card.xp, TUNING.permTrainXp);
-  await db.monsterCard.update({
-    where: { id: cardId },
-    data: {
-      [`bonus${cap(attr)}`]: { increment: TUNING.permTrainAmount },
-      energy: { decrement: TUNING.permTrainEnergyCost },
-      level: res.level,
-      xp: res.xp,
-    },
-  });
-  await db.player.update({
-    where: { id: youId },
-    data: { gold: { decrement: TUNING.permTrainGoldCost } },
-  });
-  revalidatePath("/");
-  revalidatePath("/train");
-  return { ok: true, message: `+${TUNING.permTrainAmount} دائمی اضافه شد.` };
 }
 
 export async function doFusion(

@@ -45,6 +45,7 @@ model MonsterSpecies {
   rarity    String  @default("common") // common | rare | epic | legendary
   isBase    Boolean @default(false)
   icon      String  @default("🐲")
+  imageUrl  String? // optional square image (path under /uploads or external URL)
 
   // Base attributes at level 1 (3 offensive / 3 defensive)
   power        Int

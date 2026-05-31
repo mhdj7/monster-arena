@@ -10,6 +10,7 @@ export type BattleCard = {
   name: string;
   nameFa: string;
   icon: string;
+  imageUrl?: string | null;
   stats: SpeciesStats;
 };
 
@@ -118,5 +119,66 @@ export function simulateBattle(
     scoreSelf,
     scoreOpp,
     log,
+  };
+}
+
+// ---- official 3v3 = three fixed 1v1 matchups ----
+
+export type MatchupFighter = {
+  nameFa: string;
+  icon: string;
+  imageUrl?: string | null;
+};
+
+export type Matchup = {
+  index: number; // 1..3
+  self: MatchupFighter;
+  opp: MatchupFighter;
+  result: BattleResult; // the 1v1 clash-by-clash result
+  winner: "self" | "opp";
+};
+
+export type OfficialResult = {
+  winner: "self" | "opp";
+  winsSelf: number;
+  winsOpp: number;
+  matchups: Matchup[];
+};
+
+function fighter(card: BattleCard): MatchupFighter {
+  return { nameFa: card.nameFa, icon: card.icon, imageUrl: card.imageUrl };
+}
+
+// Official battle: card[i] fights opp[i] in a separate 1v1. The team that wins
+// more of the individual matchups wins overall.
+export function simulateOfficial(
+  selfTeam: BattleCard[],
+  oppTeam: BattleCard[]
+): OfficialResult {
+  const n = Math.min(selfTeam.length, oppTeam.length);
+  const matchups: Matchup[] = [];
+  let winsSelf = 0;
+  let winsOpp = 0;
+
+  for (let i = 0; i < n; i++) {
+    const self = selfTeam[i];
+    const opp = oppTeam[i];
+    const result = simulateBattle([self], [opp]);
+    if (result.winner === "self") winsSelf += 1;
+    else winsOpp += 1;
+    matchups.push({
+      index: i + 1,
+      self: fighter(self),
+      opp: fighter(opp),
+      result,
+      winner: result.winner,
+    });
+  }
+
+  return {
+    winner: winsSelf >= winsOpp ? "self" : "opp",
+    winsSelf,
+    winsOpp,
+    matchups,
   };
 }

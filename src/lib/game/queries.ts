@@ -28,6 +28,7 @@ export type CardView = {
     name: string;
     nameFa: string;
     icon: string;
+    imageUrl: string | null;
     rarity: string;
     rarityFa: string;
     theme: string;
@@ -59,6 +60,7 @@ function toCardView(card: {
     name: string;
     nameFa: string;
     icon: string;
+    imageUrl: string | null;
     rarity: string;
     theme: string;
     power: number;
@@ -82,6 +84,7 @@ function toCardView(card: {
       name: card.species.name,
       nameFa: card.species.nameFa,
       icon: card.species.icon,
+      imageUrl: card.species.imageUrl,
       rarity: card.species.rarity,
       rarityFa: RARITY_LABEL_FA[card.species.rarity] ?? card.species.rarity,
       theme: card.species.theme,
@@ -209,6 +212,84 @@ export async function getFusionOptions(cardId: string) {
       })),
     })),
   };
+}
+
+// ---- admin data ----
+
+export type AdminSpecies = {
+  id: string;
+  key: string;
+  name: string;
+  nameFa: string;
+  icon: string;
+  imageUrl: string | null;
+  theme: string;
+  rarity: string;
+  isBase: boolean;
+  power: number;
+  defense: number;
+  speed: number;
+  evasion: number;
+  intelligence: number;
+  accuracy: number;
+  cardCount: number;
+  fusions: {
+    optionIndex: number;
+    resultSpeciesId: string | null;
+    isRandom: boolean;
+    costs: { resourceKey: string; quantity: number }[];
+  }[];
+};
+
+export async function getAdminSpecies(): Promise<AdminSpecies[]> {
+  const species = await db.monsterSpecies.findMany({
+    orderBy: [{ isBase: "desc" }, { nameFa: "asc" }],
+    include: {
+      fusionsFrom: {
+        orderBy: { optionIndex: "asc" },
+        include: { costs: { include: { resourceType: true } } },
+      },
+      _count: { select: { cards: true } },
+    },
+  });
+  return species.map((s) => ({
+    id: s.id,
+    key: s.key,
+    name: s.name,
+    nameFa: s.nameFa,
+    icon: s.icon,
+    imageUrl: s.imageUrl,
+    theme: s.theme,
+    rarity: s.rarity,
+    isBase: s.isBase,
+    power: s.power,
+    defense: s.defense,
+    speed: s.speed,
+    evasion: s.evasion,
+    intelligence: s.intelligence,
+    accuracy: s.accuracy,
+    cardCount: s._count.cards,
+    fusions: s.fusionsFrom.map((f) => ({
+      optionIndex: f.optionIndex,
+      resultSpeciesId: f.resultSpeciesId,
+      isRandom: f.isRandom,
+      costs: f.costs.map((c) => ({
+        resourceKey: c.resourceType.key,
+        quantity: c.quantity,
+      })),
+    })),
+  }));
+}
+
+export type AdminResource = {
+  key: string;
+  nameFa: string;
+  icon: string;
+};
+
+export async function getResourceTypesList(): Promise<AdminResource[]> {
+  const list = await db.resourceType.findMany({ orderBy: { name: "asc" } });
+  return list.map((r) => ({ key: r.key, nameFa: r.nameFa, icon: r.icon }));
 }
 
 export async function getBattleHistory(limit = 15) {
