@@ -1,0 +1,175 @@
+// Monster Arena - Prisma schema
+// Local SQLite database for the game.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Global, single-row game state (drives the "day" clock for daily/weekly/monthly logic).
+model GameState {
+  id            Int      @id @default(1)
+  day           Int      @default(1)
+  lastWeekDay   Int      @default(1) // day on which weekly rewards were last granted
+  lastMonthDay  Int      @default(1) // day on which monthly league update last ran
+  updatedAt     DateTime @updatedAt
+}
+
+model Player {
+  id                  String   @id @default(cuid())
+  name                String
+  isBot               Boolean  @default(false)
+  gold                Int      @default(0)
+  leagueLevel         Int      @default(1) // 1 (weak) .. 8 (strong)
+  leaguePoints        Int      @default(0)
+  // day number on which this player last fought an official battle (0 = never)
+  lastOfficialDay     Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  monsters   MonsterCard[]
+  inventory  ResourceStack[]
+  battles    Battle[]
+}
+
+// Definition / template of a monster (base monsters + fusion results).
+model MonsterSpecies {
+  id        String  @id @default(cuid())
+  key       String  @unique
+  name      String
+  nameFa    String
+  theme     String  @default("tech") // "old" | "tech"
+  rarity    String  @default("common") // common | rare | epic | legendary
+  isBase    Boolean @default(false)
+  icon      String  @default("🐲")
+
+  // Base attributes at level 1 (3 offensive / 3 defensive)
+  power        Int
+  defense      Int
+  speed        Int
+  evasion      Int
+  intelligence Int
+  accuracy     Int
+
+  cards        MonsterCard[]
+  fusionsFrom  FusionRecipe[] @relation("FusionFrom")
+  fusionsTo    FusionRecipe[] @relation("FusionTo")
+  shopOffers   ShopMonsterOffer[]
+}
+
+// An owned instance of a monster.
+model MonsterCard {
+  id         String @id @default(cuid())
+  ownerId    String
+  speciesId  String
+
+  level      Int @default(1)
+  xp         Int @default(0)
+  energy     Int @default(3) // current energy; max = level + 2
+  fatigue    Int @default(0) // raised by underground fights, reduces stats
+
+  // Permanent attribute bonuses (from permanent training / fusion growth)
+  bonusPower        Int @default(0)
+  bonusDefense      Int @default(0)
+  bonusSpeed        Int @default(0)
+  bonusEvasion      Int @default(0)
+  bonusIntelligence Int @default(0)
+  bonusAccuracy     Int @default(0)
+
+  // Temporary attribute bonuses (from temporary training, reset each day)
+  tempPower        Int @default(0)
+  tempDefense      Int @default(0)
+  tempSpeed        Int @default(0)
+  tempEvasion      Int @default(0)
+  tempIntelligence Int @default(0)
+  tempAccuracy     Int @default(0)
+
+  createdAt  DateTime @default(now())
+
+  owner   Player         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  species MonsterSpecies @relation(fields: [speciesId], references: [id])
+
+  @@index([ownerId])
+}
+
+model ResourceType {
+  id      String @id @default(cuid())
+  key     String @unique
+  name    String
+  nameFa  String
+  icon    String @default("📦")
+  price   Int    @default(50) // gold cost to buy 1 in the shop
+
+  stacks       ResourceStack[]
+  fusionCosts  FusionCost[]
+}
+
+model ResourceStack {
+  id             String @id @default(cuid())
+  playerId       String
+  resourceTypeId String
+  quantity       Int    @default(0)
+
+  player       Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  resourceType ResourceType @relation(fields: [resourceTypeId], references: [id])
+
+  @@unique([playerId, resourceTypeId])
+}
+
+// One of the 8 fusion paths for a given source species.
+model FusionRecipe {
+  id           String  @id @default(cuid())
+  fromSpeciesId String
+  optionIndex  Int     // 1..8 (8 = random transform)
+  resultSpeciesId String? // null => random (option 8)
+  isRandom     Boolean @default(false)
+
+  from   MonsterSpecies  @relation("FusionFrom", fields: [fromSpeciesId], references: [id])
+  result MonsterSpecies? @relation("FusionTo", fields: [resultSpeciesId], references: [id])
+  costs  FusionCost[]
+
+  @@unique([fromSpeciesId, optionIndex])
+}
+
+model FusionCost {
+  id             String @id @default(cuid())
+  recipeId       String
+  resourceTypeId String
+  quantity       Int
+
+  recipe       FusionRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  resourceType ResourceType @relation(fields: [resourceTypeId], references: [id])
+}
+
+// Monster cards on sale in the shop (rotate periodically).
+model ShopMonsterOffer {
+  id        String  @id @default(cuid())
+  speciesId String
+  price     Int
+  active    Boolean @default(true)
+
+  species MonsterSpecies @relation(fields: [speciesId], references: [id])
+}
+
+// Battle history / logs.
+model Battle {
+  id           String   @id @default(cuid())
+  playerId     String
+  type         String   // "OFFICIAL" | "UNDERGROUND"
+  result       String   // "WIN" | "LOSS"
+  opponentName String
+  scoreSelf    Int
+  scoreOpp     Int
+  rewardGold   Int      @default(0)
+  rewardJson   String   @default("[]") // JSON: [{resourceKey, qty}]
+  log          String   @default("[]") // JSON: array of log line objects
+  day          Int      @default(1)
+  createdAt    DateTime @default(now())
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+}

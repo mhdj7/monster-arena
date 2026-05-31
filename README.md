@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🐉 مانستر آرنا (Monster Arena)
 
-## Getting Started
+بازی وب جمع‌آوری و مبارزه‌ی کارت‌های هیولا — نسخه‌ی لوکال.
 
-First, run the development server:
+A web game about collecting, training, fusing and battling monster cards, with an
+8-tier league system and bot opponents. Built with Next.js (App Router) +
+TypeScript + Tailwind CSS + Prisma/SQLite.
+
+## امکانات (Features)
+
+- **۱۲ هیولای پایه** + ده‌ها گونه‌ی تکامل‌یافته، با ۶ اتریبیوت (۳ مهاجم / ۳ مدافع).
+- **مبارزه‌ی رسمی ۳v۳** (روزانه، روی رتبه‌ی لیگ اثر دارد) و **رینگ زیرزمینی ۱v۱**
+  (مصرف انرژی + خستگی). موتور مبارزه اتوماتیک و کلش‌به‌کلش است (اول به ۳ امتیاز).
+- **انرژی** (= سطح + ۲)، **تمرین موقت/دائمی**، و **سطح‌بندی** با XP از مبارزه و تمرین.
+- **فیوژن**: هر هیولا ۸ مسیر ارتقا دارد (۱ تا ۷ مشخص، گزینه‌ی ۸ تبدیل کاملاً رندوم).
+- **۱۵ منبع**، **اقتصاد و فروشگاه** (خرید منابع و کارت هیولا).
+- **لیدربورد و لیگ ۸ سطحی**، آپدیت ماهانه (۳۰٪ صعود / ۴۰٪ ماندن / ۳۰٪ نزول) و
+  **جعبه‌ی پاداش هفتگی**.
+- حریف‌ها به‌صورت بات در دیتابیس شبیه‌سازی شده‌اند.
+
+## اجرا (Getting started)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env          # DATABASE_URL="file:./dev.db"
+npx prisma migrate dev        # ساخت دیتابیس و اعمال migrationها
+npm run db:seed               # پر کردن دیتابیس (هیولاها، منابع، بات‌ها، فروشگاه)
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> زمان «روز» در بازی شبیه‌سازی‌شده است: با دکمه‌ی **«پایان روز / روز بعد»** در خانه،
+> انرژی هیولاها پر، خستگی صفر، بافرهای موقت پاک، و رویدادهای هفتگی/ماهانه اعمال می‌شوند.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## اسکریپت‌ها (Scripts)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| دستور | کار |
+|------|------|
+| `npm run dev` | اجرای محیط توسعه |
+| `npm run build` / `npm start` | بیلد و اجرای production |
+| `npm run lint` | اجرای ESLint |
+| `npm run db:seed` | پر کردن دیتابیس |
+| `npm run db:reset` | ریست کامل دیتابیس + seed |
 
-## Learn More
+## ساختار (Structure)
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `prisma/schema.prisma` — مدل داده (هیولاها، کارت‌ها، منابع، فیوژن، بازیکن‌ها، مبارزات).
+- `prisma/seed.ts` — دیتای اولیه.
+- `src/lib/game/` — منطق بازی: `constants.ts`, `stats.ts`, `battle.ts`, `queries.ts`.
+- `src/app/actions.ts` — Server Actions (مبارزه، تمرین، فیوژن، خرید، پایان روز).
+- `src/app/*` — صفحات: خانه، کلکسیون، مبارزه، تمرین، فیوژن، فروشگاه، لیدربورد.
+- `src/components/` — کامپوننت‌های UI.
