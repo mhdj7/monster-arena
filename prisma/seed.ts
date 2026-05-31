@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import {
@@ -219,6 +221,10 @@ async function main() {
     });
   }
 
+  // Apply admin overrides exported from the admin panel (seed-overrides.json),
+  // so balance/card/image/fusion edits made in-game become permanent in git.
+  await applyOverrides();
+
   const counts = {
     species: await db.monsterSpecies.count(),
     resources: await db.resourceType.count(),
@@ -227,6 +233,117 @@ async function main() {
     cards: await db.monsterCard.count(),
   };
   console.log("Seed complete:", counts);
+}
+
+type SpeciesOverride = {
+  key: string;
+  name: string;
+  nameFa: string;
+  theme: string;
+  rarity: string;
+  isBase: boolean;
+  icon: string;
+  imageUrl: string | null;
+  power: number;
+  defense: number;
+  speed: number;
+  evasion: number;
+  intelligence: number;
+  accuracy: number;
+};
+
+type FusionOverride = {
+  fromKey: string;
+  optionIndex: number;
+  resultKey: string | null;
+  isRandom: boolean;
+  costs: { resourceKey: string; quantity: number }[];
+};
+
+type SeedOverrides = {
+  species?: SpeciesOverride[];
+  fusions?: FusionOverride[];
+};
+
+async function applyOverrides() {
+  const file = path.join(process.cwd(), "prisma", "seed-overrides.json");
+  if (!existsSync(file)) return;
+
+  let data: SeedOverrides;
+  try {
+    data = JSON.parse(readFileSync(file, "utf8")) as SeedOverrides;
+  } catch {
+    console.warn("seed-overrides.json is invalid JSON — skipping overrides.");
+    return;
+  }
+
+  const speciesByKey: Record<string, string> = {};
+  for (const s of data.species ?? []) {
+    const fields = {
+      name: s.name,
+      nameFa: s.nameFa,
+      theme: s.theme,
+      rarity: s.rarity,
+      isBase: s.isBase,
+      icon: s.icon,
+      imageUrl: s.imageUrl ?? null,
+      power: s.power,
+      defense: s.defense,
+      speed: s.speed,
+      evasion: s.evasion,
+      intelligence: s.intelligence,
+      accuracy: s.accuracy,
+    };
+    const created = await db.monsterSpecies.upsert({
+      where: { key: s.key },
+      update: fields,
+      create: { key: s.key, ...fields },
+    });
+    speciesByKey[s.key] = created.id;
+  }
+
+  const resByKey: Record<string, string> = {};
+  for (const r of await db.resourceType.findMany()) resByKey[r.key] = r.id;
+
+  async function speciesId(key: string): Promise<string | null> {
+    if (speciesByKey[key]) return speciesByKey[key];
+    const found = await db.monsterSpecies.findUnique({ where: { key } });
+    if (found) speciesByKey[key] = found.id;
+    return found?.id ?? null;
+  }
+
+  for (const f of data.fusions ?? []) {
+    const fromId = await speciesId(f.fromKey);
+    if (!fromId || f.optionIndex < 1 || f.optionIndex > 8) continue;
+    const resultId = f.isRandom || !f.resultKey ? null : await speciesId(f.resultKey);
+
+    const recipe = await db.fusionRecipe.upsert({
+      where: {
+        fromSpeciesId_optionIndex: { fromSpeciesId: fromId, optionIndex: f.optionIndex },
+      },
+      update: { resultSpeciesId: resultId, isRandom: f.isRandom },
+      create: {
+        fromSpeciesId: fromId,
+        optionIndex: f.optionIndex,
+        resultSpeciesId: resultId,
+        isRandom: f.isRandom,
+      },
+    });
+
+    await db.fusionCost.deleteMany({ where: { recipeId: recipe.id } });
+    for (const c of f.costs ?? []) {
+      const resourceTypeId = resByKey[c.resourceKey];
+      const quantity = Math.max(1, Math.round(Number(c.quantity) || 0));
+      if (!resourceTypeId || quantity <= 0) continue;
+      await db.fusionCost.create({
+        data: { recipeId: recipe.id, resourceTypeId, quantity },
+      });
+    }
+  }
+
+  console.log(
+    `Applied admin overrides: ${data.species?.length ?? 0} species, ${data.fusions?.length ?? 0} fusion paths.`
+  );
 }
 
 main()
