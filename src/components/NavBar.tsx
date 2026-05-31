@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/fusion", label: "فیوژن", icon: "🔀" },
   { href: "/shop", label: "فروشگاه", icon: "🛒" },
   { href: "/leaderboard", label: "لیدربورد", icon: "🏆" },
+  { href: "/admin", label: "مدیریت", icon: "🛠️" },
 ];
 
 export function NavBar() {

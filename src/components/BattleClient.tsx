@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CardView } from "@/lib/game/queries";
 import { MonsterCard } from "@/components/MonsterCard";
 import { BattleReplay } from "@/components/BattleReplay";
+import { OfficialBattleReplay } from "@/components/OfficialBattleReplay";
 import { fightOfficial, fightUnderground, FightResponse } from "@/app/actions";
 
 export function BattleClient({
@@ -92,6 +93,10 @@ export function BattleClient({
               <div className="text-sm text-white/60">
                 ۳ هیولا انتخاب کن — انتخاب‌شده: {selected.length}/۳
               </div>
+              <div className="text-xs text-white/40 mt-1">
+                هر هیولا با هیولای هم‌ردیفِ حریف مبارزه می‌کند (۱ با ۱، ۲ با ۲، ۳ با ۳). تیمِ
+                برنده‌ی بیشترِ مبارزه‌ها، فاتح است.
+              </div>
             </div>
             {officialDone ? (
               <span className="text-emerald-300 text-sm">✅ مبارزه رسمی امروز انجام شده</span>
@@ -107,14 +112,23 @@ export function BattleClient({
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {monsters.map((m) => (
-              <MonsterCard
-                key={m.id}
-                card={m}
-                selected={selected.includes(m.id)}
-                onClick={officialDone ? undefined : () => toggle(m.id)}
-              />
-            ))}
+            {monsters.map((m) => {
+              const order = selected.indexOf(m.id);
+              return (
+                <div key={m.id} className="relative">
+                  {order >= 0 && (
+                    <span className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-violet-500 text-white text-sm font-extrabold flex items-center justify-center shadow-lg ring-2 ring-white/20">
+                      {order + 1}
+                    </span>
+                  )}
+                  <MonsterCard
+                    card={m}
+                    selected={selected.includes(m.id)}
+                    onClick={officialDone ? undefined : () => toggle(m.id)}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -145,7 +159,12 @@ export function BattleClient({
         </div>
       )}
 
-      {replay && <BattleReplay data={replay} onClose={closeReplay} />}
+      {replay &&
+        (replay.mode === "official" ? (
+          <OfficialBattleReplay data={replay} onClose={closeReplay} />
+        ) : (
+          <BattleReplay data={replay} onClose={closeReplay} />
+        ))}
     </div>
   );
 }

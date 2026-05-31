@@ -1,6 +1,37 @@
 import { CardView } from "@/lib/game/queries";
 import { ATTRIBUTE_LABELS_FA } from "@/lib/game/constants";
 
+// Square thumbnail: monster image if set, otherwise the emoji icon.
+export function CardThumb({
+  imageUrl,
+  icon,
+  alt,
+  size = "w-12 h-12",
+}: {
+  imageUrl?: string | null;
+  icon: string;
+  alt?: string;
+  size?: string;
+}) {
+  if (imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imageUrl}
+        alt={alt ?? ""}
+        className={`${size} rounded-xl object-cover bg-white/5 shrink-0`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${size} rounded-xl bg-white/5 flex items-center justify-center text-3xl leading-none shrink-0`}
+    >
+      {icon}
+    </div>
+  );
+}
+
 const STAT_ROWS: {
   off: "power" | "speed" | "intelligence";
   def: "defense" | "evasion" | "accuracy";
@@ -43,7 +74,11 @@ export function MonsterCard({
       } ${selected ? "outline outline-2 outline-violet-400" : ""}`}
     >
       <div className="flex items-center gap-3">
-        <div className="text-4xl leading-none">{card.species.icon}</div>
+        <CardThumb
+          imageUrl={card.species.imageUrl}
+          icon={card.species.icon}
+          alt={card.species.nameFa}
+        />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-bold truncate">{card.species.nameFa}</span>

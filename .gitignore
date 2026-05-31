@@ -40,6 +40,10 @@ yarn-error.log*
 *.db-wal
 *.db-shm
 
+# uploaded monster images (kept on the server, not in git)
+/public/uploads/*
+!/public/uploads/.gitkeep
+
 # vercel
 .vercel
 
